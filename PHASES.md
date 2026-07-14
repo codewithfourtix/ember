@@ -2,7 +2,7 @@
 
 `ember` is built in three phases. Each ends with something that works and is worth showing.
 
-## Phase 1 — Correctness (a real LLM, generating text)
+## Phase 1 — Correctness (a real LLM, generating text) ✅
 
 A hand-written **f32 forward pass** that loads a real Qwen2.5 model and produces
 coherent text. Nothing fast yet — just *right*.
@@ -12,7 +12,8 @@ coherent text. Nothing fast yet — just *right*.
 - The full transformer forward pass in `model.rs`
 - Greedy + top-p sampling, wired into a real generation loop
 - **Done when:** `cargo run --release -- --prompt "The capital of France is"` prints a
-  coherent continuation.
+  coherent continuation. **✅ Done** — output: *"…is Paris. It is the largest city in
+  Europe and the third…"*, cross-checked against `scripts/reference_forward.py`.
 
 ## Phase 2 — Performance (fast, and quantized)
 
