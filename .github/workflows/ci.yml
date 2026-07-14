@@ -18,3 +18,8 @@ jobs:
         run: cargo build --release --verbose
       - name: Test
         run: cargo test --verbose
+      - name: Benchmark (executes the forward pass on random weights)
+        run: |
+          cargo run --release -- --bench --quant none -n 16
+          cargo run --release -- --bench --quant int8 -n 16
+          cargo run --release -- --bench --quant int4 -n 16

@@ -161,6 +161,38 @@ impl Model {
         logits
     }
 
+    /// Build a model of `config`'s shape with random weights, quantized per
+    /// `scheme`. For benchmarking only — the timing depends on the matrix sizes,
+    /// not the weight values, so this measures real throughput without needing
+    /// the actual model on disk.
+    pub fn random(config: Config, scheme: Quant) -> Self {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let h = config.hidden_size;
+        let q_dim = config.num_attention_heads * config.head_dim();
+        let kv = config.kv_dim();
+        let inter = config.intermediate_size;
+
+        let embed = Linear::build(fill_random(config.vocab_size * h, &mut seed), config.vocab_size, h, scheme);
+        let mut layers = Vec::with_capacity(config.num_hidden_layers);
+        for _ in 0..config.num_hidden_layers {
+            layers.push(Layer {
+                input_ln: vec![1.0; h],
+                q: Linear::build(fill_random(q_dim * h, &mut seed), q_dim, h, scheme),
+                q_b: vec![0.0; q_dim],
+                k: Linear::build(fill_random(kv * h, &mut seed), kv, h, scheme),
+                k_b: vec![0.0; kv],
+                v: Linear::build(fill_random(kv * h, &mut seed), kv, h, scheme),
+                v_b: vec![0.0; kv],
+                o: Linear::build(fill_random(h * q_dim, &mut seed), h, q_dim, scheme),
+                post_ln: vec![1.0; h],
+                gate: Linear::build(fill_random(inter * h, &mut seed), inter, h, scheme),
+                up: Linear::build(fill_random(inter * h, &mut seed), inter, h, scheme),
+                down: Linear::build(fill_random(h * inter, &mut seed), h, inter, scheme),
+            });
+        }
+        Self { config, embed, layers, final_norm: vec![1.0; h] }
+    }
+
     /// A KV cache sized for this model's (capped) context length.
     pub fn new_cache(&self) -> KvCache {
         let cap = self.config.max_position_embeddings.min(MAX_CONTEXT);
@@ -177,6 +209,20 @@ impl Model {
         }
         total
     }
+}
+
+/// Fill a vector with small deterministic pseudo-random weights (xorshift).
+fn fill_random(n: usize, seed: &mut u64) -> Vec<f32> {
+    let mut out = Vec::with_capacity(n);
+    for _ in 0..n {
+        let mut s = *seed;
+        s ^= s << 13;
+        s ^= s >> 7;
+        s ^= s << 17;
+        *seed = s;
+        out.push(((s >> 40) as f32 / (1u64 << 24) as f32 - 0.5) * 0.04);
+    }
+    out
 }
 
 /// Load a named tensor and convert it to `f32`, whatever its stored dtype.

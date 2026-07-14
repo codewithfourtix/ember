@@ -23,6 +23,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use tokenizers::Tokenizer;
 
+use config::Config;
 use model::Model;
 use quant::Quant;
 use sample::{Rng, Sampler};
@@ -35,7 +36,7 @@ const EOS_IDS: [u32; 2] = [151643, 151645];
 #[command(name = "ember", version, about)]
 struct Args {
     /// Prompt to complete.
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "The capital of France is")]
     prompt: String,
 
     /// Directory with `config.json`, `model.safetensors`, and `tokenizer.json`.
@@ -65,6 +66,10 @@ struct Args {
     /// System prompt used in `--chat` mode.
     #[arg(long, default_value = "You are a helpful assistant.")]
     system: String,
+
+    /// Benchmark throughput on a randomly-weighted model (no weights needed).
+    #[arg(long)]
+    bench: bool,
 }
 
 fn main() -> Result<()> {
@@ -72,6 +77,10 @@ fn main() -> Result<()> {
 
     let scheme = Quant::parse(&args.quant)
         .ok_or_else(|| anyhow!("unknown --quant '{}' (expected none, int8, or int4)", args.quant))?;
+
+    if args.bench {
+        return run_bench(scheme, &args);
+    }
 
     eprintln!("loading model from {} ({}) ...", args.model.display(), args.quant);
     let load_start = Instant::now();
@@ -149,6 +158,38 @@ fn main() -> Result<()> {
     eprintln!(
         "\n{generated} tokens in {secs:.1}s ({:.1} tok/s)",
         generated as f32 / secs.max(1e-6)
+    );
+    Ok(())
+}
+
+/// Benchmark throughput on a randomly-weighted model of the Qwen2.5-0.5B shape.
+fn run_bench(scheme: Quant, args: &Args) -> Result<()> {
+    let config = Config::preset_qwen2_5_0_5b();
+    eprintln!("building random {} model (Qwen2.5-0.5B shape) ...", args.quant);
+    let built = Instant::now();
+    let model = Model::random(config, scheme);
+    let mb = model.weight_bytes() as f64 / 1e6;
+    eprintln!("built {mb:.0} MB in {:.1}s", built.elapsed().as_secs_f32());
+
+    let mut cache = model.new_cache();
+    for pos in 0..3 {
+        let _ = model.forward(0, pos, &mut cache); // warm up
+        cache.advance();
+    }
+    cache.clear();
+
+    let n = args.max_tokens.max(8);
+    let start = Instant::now();
+    for pos in 0..n {
+        let _ = model.forward((pos % 100) as u32, pos, &mut cache);
+        cache.advance();
+    }
+    let secs = start.elapsed().as_secs_f32();
+    println!(
+        "{:>5} | {:6.0} MB | {:6.1} tok/s",
+        args.quant,
+        mb,
+        n as f32 / secs.max(1e-6)
     );
     Ok(())
 }

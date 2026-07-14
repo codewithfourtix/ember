@@ -67,4 +67,21 @@ impl Config {
     pub fn kv_dim(&self) -> usize {
         self.num_key_value_heads * self.head_dim()
     }
+
+    /// The Qwen2.5-0.5B-Instruct shape — used by the benchmark to build a
+    /// randomly-weighted model without needing the real weights on disk.
+    pub fn preset_qwen2_5_0_5b() -> Self {
+        Config {
+            hidden_size: 896,
+            num_hidden_layers: 24,
+            num_attention_heads: 14,
+            num_key_value_heads: 2,
+            intermediate_size: 4864,
+            vocab_size: 151936,
+            max_position_embeddings: 32768,
+            rope_theta: 1_000_000.0,
+            rms_norm_eps: 1e-6,
+            tie_word_embeddings: true,
+        }
+    }
 }
