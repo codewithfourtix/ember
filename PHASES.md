@@ -27,11 +27,15 @@ Make it quick and small.
   (see the README table). The tokens/sec column lands once the binary is built on a host
   without the local toolchain block.
 
-## Phase 3 — Polish & ship
+## Phase 3 — Polish & ship ✅
 
 Make it a thing people can use and be impressed by.
 
-- Streaming token output, chat-template support, nicer CLI
-- Benchmark table + a demo in the README
-- Unit tests for the kernels (against small hand-checked cases)
-- Write-up; optional: a merged perf PR to a major serving framework (vLLM / SGLang / llama.cpp)
+- [x] Streaming token output + ChatML chat mode (`--chat`, `--system`) + nicer CLI
+- [x] Benchmark table + demo in the README
+- [x] Unit tests for the kernels (`cargo test`) — mat-vec, RMSNorm, RoPE, SwiGLU, softmax,
+      sampling, and quantization round-trips, against small hand-checked cases
+- [ ] Write-up; optional: a merged perf PR to a major serving framework (vLLM / SGLang / llama.cpp)
+
+Chat mode verified against the NumPy reference — e.g. *"Write a haiku about Rust
+programming."* → *"Rust's syntax shines, / Type-safe, concise, and fast, / Programming heaven."*

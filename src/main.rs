@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 mod attention;
+mod chat;
 mod config;
 mod model;
 mod ops;
@@ -56,6 +57,14 @@ struct Args {
     /// Weight quantization: `none` (f32), `int8`, or `int4`.
     #[arg(short, long, default_value = "none")]
     quant: String,
+
+    /// Treat the prompt as a chat turn (Qwen ChatML template).
+    #[arg(long)]
+    chat: bool,
+
+    /// System prompt used in `--chat` mode.
+    #[arg(long, default_value = "You are a helpful assistant.")]
+    system: String,
 }
 
 fn main() -> Result<()> {
@@ -84,8 +93,14 @@ fn main() -> Result<()> {
     };
     let mut rng = Rng::new(seed());
 
+    // In chat mode, wrap the prompt in the ChatML template; otherwise complete it raw.
+    let full_prompt = if args.chat {
+        chat::chatml(&args.system, &args.prompt)
+    } else {
+        args.prompt.clone()
+    };
     let encoding = tokenizer
-        .encode(args.prompt.as_str(), false)
+        .encode(full_prompt.as_str(), false)
         .map_err(|e| anyhow!("tokenizing prompt: {e}"))?;
     let prompt_ids = encoding.get_ids();
     if prompt_ids.is_empty() {
@@ -97,8 +112,11 @@ fn main() -> Result<()> {
     let mut out = stdout.lock();
 
     // Prefill: feed every prompt token, keeping the logits after the last one.
-    print!("{}", args.prompt);
-    out.flush().ok();
+    // In completion mode we echo the prompt; in chat mode we stream only the reply.
+    if !args.chat {
+        print!("{}", args.prompt);
+        out.flush().ok();
+    }
     let gen_start = Instant::now();
     let mut logits = Vec::new();
     for (pos, &id) in prompt_ids.iter().enumerate() {

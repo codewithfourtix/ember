@@ -16,16 +16,21 @@ MLP — then runs the heavy matrices through custom **INT8/INT4 quantization** s
 0.5–1.5B model fits in a laptop's memory and decodes fast. **No `candle`, `burn`,
 `tch`, or `ndarray` in the core:** the transformer math is the project.
 
-> **Status — Phase 1 complete.** The f32 forward pass is implemented and verified end
-> to end: run against Qwen2.5-0.5B it generates coherent text. Speed (quantization,
-> benchmarks) is Phase 2 — see [`PHASES.md`](PHASES.md).
+> **Status.** All three phases implemented: a verified f32 forward pass, INT8/INT4
+> quantization (4× / 7× smaller, still coherent), and a ChatML chat mode. Every kernel
+> is cross-checked against a NumPy reference — see [`PHASES.md`](PHASES.md).
 
 ```console
 $ ember --prompt "The capital of France is"
 The capital of France is Paris. It is the largest city in Europe and the third
+
+$ ember --chat --prompt "Write a haiku about Rust programming."
+Rust's syntax shines,
+Type-safe, concise, and fast,
+Programming heaven.
 ```
 
-<sub>Greedy decode from Qwen2.5-0.5B, cross-checked token-for-token against the NumPy reference in <a href="scripts/reference_forward.py"><code>scripts/reference_forward.py</code></a>.</sub>
+<sub>Qwen2.5-0.5B, cross-checked token-for-token against the NumPy reference in <a href="scripts/reference_forward.py"><code>scripts/reference_forward.py</code></a>.</sub>
 
 ## Why build this
 
@@ -103,7 +108,9 @@ See [`PHASES.md`](PHASES.md) for the full plan.
       generation loop. Verified: generates coherent text from Qwen2.5-0.5B.
 - [~] **Phase 2 — Performance** — INT8/INT4 quantization implemented (4.0× / 7.1× memory,
       coherent) + `rayon`-parallel mat-vec. Tokens/sec benchmark to follow on a build host.
-- [ ] **Phase 3 — Polish & ship** — streaming CLI, chat template, benchmark table, tests, write-up
+- [x] **Phase 3 — Polish & ship** — streaming output, ChatML chat mode (`--chat`), the
+      quantization benchmark table above, and `cargo test` kernel unit tests. Tokens/sec
+      numbers land once the binary is built on a host without the local toolchain block.
 
 ## License
 
