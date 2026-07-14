@@ -23,6 +23,7 @@ use clap::Parser;
 use tokenizers::Tokenizer;
 
 use model::Model;
+use quant::Quant;
 use sample::{Rng, Sampler};
 
 /// Token ids that end generation (Qwen2.5: <|endoftext|> and <|im_end|>).
@@ -51,20 +52,28 @@ struct Args {
     /// Nucleus (top-p) cutoff, used when `temperature > 0`.
     #[arg(long, default_value_t = 0.95)]
     top_p: f32,
+
+    /// Weight quantization: `none` (f32), `int8`, or `int4`.
+    #[arg(short, long, default_value = "none")]
+    quant: String,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    eprintln!("loading model from {} ...", args.model.display());
+    let scheme = Quant::parse(&args.quant)
+        .ok_or_else(|| anyhow!("unknown --quant '{}' (expected none, int8, or int4)", args.quant))?;
+
+    eprintln!("loading model from {} ({}) ...", args.model.display(), args.quant);
     let load_start = Instant::now();
-    let model = Model::load(&args.model)
+    let model = Model::load(&args.model, scheme)
         .with_context(|| format!("loading model from {}", args.model.display()))?;
     let tokenizer = Tokenizer::from_file(args.model.join("tokenizer.json"))
         .map_err(|e| anyhow!("loading tokenizer: {e}"))?;
     eprintln!(
-        "loaded {} layers in {:.1}s",
+        "loaded {} layers, {:.0} MB weights, in {:.1}s",
         model.config.num_hidden_layers,
+        model.weight_bytes() as f64 / 1e6,
         load_start.elapsed().as_secs_f32()
     );
 
