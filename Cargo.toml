@@ -20,8 +20,9 @@ rayon = "1"                                           # parallelise the mat-vec 
 safetensors = "0.4"                                   # load model weights
 serde = { version = "1", features = ["derive"] }      # config.json deserialization
 serde_json = "1"
-# BPE tokenizer; default features off → pure-Rust regex (no C toolchain needed).
-tokenizers = { version = "0.20", default-features = false }
+# BPE tokenizer (loads tokenizer.json). Uses `onig` — needs a C compiler at build
+# time (present on Linux/macOS and in CI; on Windows use WSL or MSVC build tools).
+tokenizers = "0.20"
 
 [profile.release]
 opt-level = 3
