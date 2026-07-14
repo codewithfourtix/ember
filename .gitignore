@@ -1,0 +1,16 @@
+# Rust build output
+/target
+
+# Model weights (downloaded separately — large, not source)
+/weights
+*.safetensors
+*.gguf
+
+# Python reference harness
+__pycache__/
+.venv/
+*.pyc
+
+# OS / editor
+.DS_Store
+.vscode/

@@ -1,0 +1,11 @@
+[package]
+name = "ember"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ali Zulfiqar <codewithfourtix@gmail.com>"]
+description = "A from-scratch LLM inference engine in Rust — run a real LLM on your CPU."
+license = "MIT"
+repository = "https://github.com/codewithfourtix/ember"
+readme = "README.md"
+
+[dependencies]
