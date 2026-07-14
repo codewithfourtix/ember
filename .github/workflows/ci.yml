@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (release)
+        run: cargo build --release --verbose
+      - name: Test
+        run: cargo test --verbose
+      - name: Benchmark (executes the forward pass on random weights)
+        run: |
+          cargo run --release -- --bench --quant none -n 16
+          cargo run --release -- --bench --quant int8 -n 16
+          cargo run --release -- --bench --quant int4 -n 16

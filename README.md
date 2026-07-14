@@ -4,9 +4,9 @@
 
 **Run a real LLM on your CPU — a from-scratch inference engine in Rust.**
 
+[![CI](https://github.com/codewithfourtix/ember/actions/workflows/ci.yml/badge.svg)](https://github.com/codewithfourtix/ember/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-2021-CE422B?style=flat-square&logo=rust&logoColor=white&labelColor=0d0e11)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=0d0e11)](LICENSE)
-[![status](https://img.shields.io/badge/status-scaffolding-f0ad4e?style=flat-square&labelColor=0d0e11)](#roadmap)
 
 </div>
 
@@ -95,8 +95,21 @@ INT8 is near-lossless; INT4 needs **group-wise** scales — per-row is too coars
 the output falls apart. Reproduce the table with
 [`scripts/quantize_check.py`](scripts/quantize_check.py).
 
+**Throughput** (`--bench`, on a 2-vCPU GitHub Actions runner — indicative):
+
+| scheme | memory | tok/s |
+|---|---|---|
+| `none` (f32) | 1976 MB | **7.1** |
+| `int8` | 496 MB | 4.4 |
+| `int4` (group-64) | 278 MB | 2.4 |
+
+Quantization here is a **memory** win — 4× / 7× smaller, so the model fits in a
+fraction of the RAM. The current dequant path is *scalar*, so it trades throughput;
+a SIMD / bandwidth-optimized dequant is the natural next optimization.
+
 ```bash
 cargo run --release -- --prompt "The capital of France is" --quant int8   # or int4 / none
+cargo run --release -- --bench --quant int8                                 # measure throughput
 ```
 
 ## Roadmap
@@ -106,8 +119,8 @@ See [`PHASES.md`](PHASES.md) for the full plan.
 - [x] **Phase 1 — Correctness** — safetensors loading, tokenizer, all kernels (RMSNorm,
       RoPE, GQA attention + KV cache, SwiGLU), the full forward pass, sampling, and the
       generation loop. Verified: generates coherent text from Qwen2.5-0.5B.
-- [~] **Phase 2 — Performance** — INT8/INT4 quantization implemented (4.0× / 7.1× memory,
-      coherent) + `rayon`-parallel mat-vec. Tokens/sec benchmark to follow on a build host.
+- [x] **Phase 2 — Performance** — INT8/INT4 quantization (4.0× / 7.1× memory, coherent),
+      `rayon`-parallel mat-vec, and a `--bench` throughput harness (numbers above).
 - [x] **Phase 3 — Polish & ship** — streaming output, ChatML chat mode (`--chat`), the
       quantization benchmark table above, and `cargo test` kernel unit tests. Tokens/sec
       numbers land once the binary is built on a host without the local toolchain block.

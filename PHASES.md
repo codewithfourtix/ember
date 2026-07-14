@@ -23,9 +23,9 @@ Make it quick and small.
 - **INT8** then **INT4** row-wise weight quantization with a fused dequant mat-vec
 - A benchmark harness reporting tokens/sec and peak memory
 - **Done when:** a table shows the speedup and the ~4× memory cut vs the f32 baseline.
-  **Quantization done** — INT8 4.0× and grouped-INT4 7.1× memory, both verified coherent
-  (see the README table). The tokens/sec column lands once the binary is built on a host
-  without the local toolchain block.
+  **Done** — INT8 4.0× and grouped-INT4 7.1× memory, both verified coherent, plus a
+  `--bench` harness with tokens/sec measured in CI (see the README table). Quantization is
+  a memory win; a SIMD dequant to also win throughput is a future optimization.
 
 ## Phase 3 — Polish & ship ✅
 
