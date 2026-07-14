@@ -1,13 +1,9 @@
 //! `ember` — a from-scratch LLM inference engine.
 //!
-//! Loads a Qwen2.5 model and generates text on the CPU. The heavy lifting lives
-//! in the sibling modules; this file wires the CLI to the generation loop.
-//!
-//! The numeric kernels are still `todo!()`, so running the binary today parses
-//! args and loads the config, then panics at the first kernel — that panic is
-//! the map of what to implement next (see the roadmap in the README).
+//! Loads a Qwen2.5 model and generates text on the CPU with a hand-written
+//! transformer forward pass. This file wires the CLI and tokenizer to the
+//! decode loop; the numeric work lives in the sibling modules.
 
-// Kernels are wired but not yet called from every module during scaffolding.
 #![allow(dead_code)]
 
 mod attention;
@@ -18,13 +14,19 @@ mod quant;
 mod sample;
 mod tensor;
 
+use std::io::Write;
 use std::path::PathBuf;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use tokenizers::Tokenizer;
 
 use model::Model;
-use sample::Sampler;
+use sample::{Rng, Sampler};
+
+/// Token ids that end generation (Qwen2.5: <|endoftext|> and <|im_end|>).
+const EOS_IDS: [u32; 2] = [151643, 151645];
 
 /// Run a local LLM on your CPU.
 #[derive(Parser, Debug)]
@@ -54,32 +56,80 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    eprintln!("loading model from {} ...", args.model.display());
+    let load_start = Instant::now();
     let model = Model::load(&args.model)
         .with_context(|| format!("loading model from {}", args.model.display()))?;
+    let tokenizer = Tokenizer::from_file(args.model.join("tokenizer.json"))
+        .map_err(|e| anyhow!("loading tokenizer: {e}"))?;
+    eprintln!(
+        "loaded {} layers in {:.1}s",
+        model.config.num_hidden_layers,
+        load_start.elapsed().as_secs_f32()
+    );
 
     let sampler = if args.temperature <= 0.0 {
         Sampler::Greedy
     } else {
-        Sampler::TopP {
-            temperature: args.temperature,
-            top_p: args.top_p,
-        }
+        Sampler::TopP { temperature: args.temperature, top_p: args.top_p }
     };
+    let mut rng = Rng::new(seed());
 
-    // Day 1: load `tokenizer.json`, encode `args.prompt`, prefill the cache with
-    // the prompt tokens, then continue the loop below from the last one.
-    let mut cache = model.new_cache();
-    let mut pos = 0usize;
-    let mut token: u32 = 0; // placeholder until the tokenizer is wired
-
-    for _ in 0..args.max_tokens {
-        let logits = model.forward(token, pos, &mut cache);
-        cache.advance();
-        token = sampler.sample(&logits);
-        pos += 1;
-        // Day 3: decode `token`, stream it to stdout, and stop on the EOS id.
+    let encoding = tokenizer
+        .encode(args.prompt.as_str(), false)
+        .map_err(|e| anyhow!("tokenizing prompt: {e}"))?;
+    let prompt_ids = encoding.get_ids();
+    if prompt_ids.is_empty() {
+        return Err(anyhow!("empty prompt"));
     }
 
-    println!("(generation loop wired — implement the kernels to bring it to life)");
+    let mut cache = model.new_cache();
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    // Prefill: feed every prompt token, keeping the logits after the last one.
+    print!("{}", args.prompt);
+    out.flush().ok();
+    let gen_start = Instant::now();
+    let mut logits = Vec::new();
+    for (pos, &id) in prompt_ids.iter().enumerate() {
+        logits = model.forward(id, pos, &mut cache);
+        cache.advance();
+    }
+
+    // Decode: sample, emit, feed back.
+    let mut pos = prompt_ids.len();
+    let mut generated = 0usize;
+    for _ in 0..args.max_tokens {
+        let next = sampler.sample(&logits, &mut rng);
+        if EOS_IDS.contains(&next) {
+            break;
+        }
+        let piece = tokenizer
+            .decode(&[next], false)
+            .map_err(|e| anyhow!("decoding token: {e}"))?;
+        print!("{piece}");
+        out.flush().ok();
+
+        logits = model.forward(next, pos, &mut cache);
+        cache.advance();
+        pos += 1;
+        generated += 1;
+    }
+    println!();
+
+    let secs = gen_start.elapsed().as_secs_f32();
+    eprintln!(
+        "\n{generated} tokens in {secs:.1}s ({:.1} tok/s)",
+        generated as f32 / secs.max(1e-6)
+    );
     Ok(())
+}
+
+/// A time-based seed for the sampler's RNG.
+fn seed() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x1234_5678)
 }

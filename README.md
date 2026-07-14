@@ -16,8 +16,16 @@ MLP — then runs the heavy matrices through custom **INT8/INT4 quantization** s
 0.5–1.5B model fits in a laptop's memory and decodes fast. **No `candle`, `burn`,
 `tch`, or `ndarray` in the core:** the transformer math is the project.
 
-> **Status — scaffolding.** The architecture, module layout, and CLI are in place;
-> the numeric kernels are marked `todo!()` and are being implemented (see the [roadmap](#roadmap)).
+> **Status — Phase 1 complete.** The f32 forward pass is implemented and verified end
+> to end: run against Qwen2.5-0.5B it generates coherent text. Speed (quantization,
+> benchmarks) is Phase 2 — see [`PHASES.md`](PHASES.md).
+
+```console
+$ ember --prompt "The capital of France is"
+The capital of France is Paris. It is the largest city in Europe and the third
+```
+
+<sub>Greedy decode from Qwen2.5-0.5B, cross-checked token-for-token against the NumPy reference in <a href="scripts/reference_forward.py"><code>scripts/reference_forward.py</code></a>.</sub>
 
 ## Why build this
 
@@ -68,13 +76,13 @@ here first and every remaining bug is in the loop, not the model.
 
 ## Roadmap
 
-- [ ] **Day 1** — weight loading (safetensors) + tokenizer + embedding → LM head
-- [ ] **Day 2** — RMSNorm, RoPE, attention, SwiGLU; logit parity vs `transformers`
-- [ ] **Day 3** — generation loop + sampling → coherent text
-- [ ] **Day 4** — KV cache; benchmark tokens/sec
-- [ ] **Day 5** — INT8/INT4 quantization; benchmark memory + speed
-- [ ] **Day 6** — streaming CLI, benchmark table, demo
-- [ ] **Day 7** — write-up
+See [`PHASES.md`](PHASES.md) for the full plan.
+
+- [x] **Phase 1 — Correctness** — safetensors loading, tokenizer, all kernels (RMSNorm,
+      RoPE, GQA attention + KV cache, SwiGLU), the full forward pass, sampling, and the
+      generation loop. Verified: generates coherent text from Qwen2.5-0.5B.
+- [ ] **Phase 2 — Performance** — `rayon` tuning, INT8/INT4 quantization, tok/s + memory benchmarks
+- [ ] **Phase 3 — Polish & ship** — streaming CLI, chat template, benchmark table, tests, write-up
 
 ## License
 
