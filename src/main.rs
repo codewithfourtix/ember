@@ -70,7 +70,18 @@ struct Args {
     /// Benchmark throughput on a randomly-weighted model (no weights needed).
     #[arg(long)]
     bench: bool,
+
+    /// Measure perplexity (output-quality metric) over a fixed passage.
+    #[arg(long)]
+    perplexity: bool,
 }
+
+/// A fixed English passage used for the perplexity metric.
+const PPL_TEXT: &str = "Machine learning is a branch of artificial intelligence that \
+focuses on building systems that learn from data. Instead of following explicitly \
+programmed rules, these systems identify patterns and make decisions with minimal human \
+intervention. As the amount of available data grows, machine learning models continue to \
+improve in accuracy and capability.";
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -94,6 +105,10 @@ fn main() -> Result<()> {
         model.weight_bytes() as f64 / 1e6,
         load_start.elapsed().as_secs_f32()
     );
+
+    if args.perplexity {
+        return perplexity(&model, &tokenizer, &args.quant);
+    }
 
     let sampler = if args.temperature <= 0.0 {
         Sampler::Greedy
@@ -126,14 +141,16 @@ fn main() -> Result<()> {
         print!("{}", args.prompt);
         out.flush().ok();
     }
-    let gen_start = Instant::now();
+    let prefill_start = Instant::now();
     let mut logits = Vec::new();
     for (pos, &id) in prompt_ids.iter().enumerate() {
         logits = model.forward(id, pos, &mut cache);
         cache.advance();
     }
+    let prefill_secs = prefill_start.elapsed().as_secs_f32();
 
     // Decode: sample, emit, feed back.
+    let decode_start = Instant::now();
     let mut pos = prompt_ids.len();
     let mut generated = 0usize;
     for _ in 0..args.max_tokens {
@@ -154,11 +171,59 @@ fn main() -> Result<()> {
     }
     println!();
 
-    let secs = gen_start.elapsed().as_secs_f32();
+    let decode_secs = decode_start.elapsed().as_secs_f32();
+    let prefill_toks = prompt_ids.len();
     eprintln!(
-        "\n{generated} tokens in {secs:.1}s ({:.1} tok/s)",
-        generated as f32 / secs.max(1e-6)
+        "\nprefill: {prefill_toks} tok in {:.0} ms ({:.1} tok/s)  |  decode: {generated} tok, {:.1} tok/s ({:.0} ms/tok)",
+        prefill_secs * 1000.0,
+        prefill_toks as f32 / prefill_secs.max(1e-6),
+        generated as f32 / decode_secs.max(1e-6),
+        decode_secs * 1000.0 / generated.max(1) as f32,
     );
+    Ok(())
+}
+
+/// Measure perplexity — `exp(mean negative log-likelihood)` — over a fixed
+/// passage. Lower is better; it quantifies how much (if anything) quantization
+/// degrades the model's predictions.
+fn perplexity(model: &Model, tokenizer: &Tokenizer, label: &str) -> Result<()> {
+    let ids = tokenizer
+        .encode(PPL_TEXT, false)
+        .map_err(|e| anyhow!("tokenizing: {e}"))?
+        .get_ids()
+        .to_vec();
+
+    let mut cache = model.new_cache();
+    let mut nll = 0.0f64;
+    let mut scored = 0usize;
+
+    let start = Instant::now();
+    let mut logits = model.forward(ids[0], 0, &mut cache);
+    cache.advance();
+    for pos in 1..ids.len() {
+        // Log-probability the model assigned to the token that actually came next.
+        let target = ids[pos] as usize;
+        let mut max = f32::NEG_INFINITY;
+        for &l in &logits {
+            if l > max {
+                max = l;
+            }
+        }
+        let mut sum_exp = 0.0f32;
+        for &l in &logits {
+            sum_exp += (l - max).exp();
+        }
+        let log_prob = (logits[target] - max) - sum_exp.ln();
+        nll += -(log_prob as f64);
+        scored += 1;
+
+        logits = model.forward(ids[pos], pos, &mut cache);
+        cache.advance();
+    }
+
+    let ppl = (nll / scored as f64).exp();
+    eprintln!("scored {scored} tokens in {:.1}s", start.elapsed().as_secs_f32());
+    println!("{label:>5} | perplexity {ppl:7.3} | {scored} tokens");
     Ok(())
 }
 
