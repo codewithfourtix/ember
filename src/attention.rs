@@ -7,6 +7,7 @@
 //! key/value head, so the cache stores only `num_key_value_heads` streams.
 
 use crate::config::Config;
+use crate::ops::softmax;
 
 /// Per-layer rolling cache of past keys and values.
 ///
@@ -44,7 +45,7 @@ impl KvCache {
         self.len == 0
     }
 
-    /// The key stream for `layer` (`len * kv_dim` valid entries).
+    /// The key stream for `layer`.
     pub fn keys(&self, layer: usize) -> &[f32] {
         &self.keys[layer]
     }
@@ -54,7 +55,7 @@ impl KvCache {
         &self.values[layer]
     }
 
-    /// Write this step's key/value for `layer` at the current position.
+    /// Write this step's key/value for `layer` at the current write position.
     pub fn store(&mut self, layer: usize, key: &[f32], value: &[f32]) {
         debug_assert_eq!(key.len(), self.kv_dim);
         debug_assert_eq!(value.len(), self.kv_dim);
@@ -78,9 +79,9 @@ impl KvCache {
 
 /// Compute self-attention for one token at `pos` in a single layer.
 ///
-/// `q`/`k`/`v` are this token's projections; `k`/`v` are stored into `cache`,
-/// then the token attends over positions `0..=pos` and the weighted values are
-/// written into `out`.
+/// `q`/`k`/`v` are this token's projections (post-RoPE for `q`/`k`). This token's
+/// key/value are written into the cache, then each query head attends over
+/// positions `0..=pos` and the softmax-weighted values are written into `out`.
 #[allow(clippy::too_many_arguments)]
 pub fn attention(
     q: &[f32],
@@ -92,10 +93,46 @@ pub fn attention(
     config: &Config,
     out: &mut [f32],
 ) {
-    // 1. cache.store(layer, k, v)
-    // 2. for each query head h (mapped to kv head h / group_size):
-    //      score[t] = (q_h · k_t) / sqrt(head_dim)  for t in 0..=pos
-    //      softmax(score); out_h = Σ_t score[t] * v_t
-    let _ = (q, k, v, cache, layer, pos, config, out);
-    todo!("grouped-query scaled-dot-product attention over the KV cache")
+    let hd = config.head_dim();
+    let n_heads = config.num_attention_heads;
+    let n_kv = config.num_key_value_heads;
+    let group = n_heads / n_kv;
+    let kv_dim = config.kv_dim();
+    let scale = 1.0 / (hd as f32).sqrt();
+    let seq = pos + 1;
+
+    // Store this token's key/value, then read the whole (now length-`seq`) cache.
+    cache.store(layer, k, v);
+    let keys = cache.keys(layer);
+    let values = cache.values(layer);
+
+    let mut scores = vec![0.0f32; seq];
+    for h in 0..n_heads {
+        let kh = h / group; // which kv head this query head shares
+        let qh = &q[h * hd..h * hd + hd];
+
+        // scores[t] = (q_h · k_t) / sqrt(head_dim)
+        for t in 0..seq {
+            let base = t * kv_dim + kh * hd;
+            let kt = &keys[base..base + hd];
+            let mut s = 0.0f32;
+            for i in 0..hd {
+                s += qh[i] * kt[i];
+            }
+            scores[t] = s * scale;
+        }
+        softmax(&mut scores);
+
+        // out_h = Σ_t scores[t] * v_t
+        let oh = &mut out[h * hd..h * hd + hd];
+        oh.iter_mut().for_each(|o| *o = 0.0);
+        for t in 0..seq {
+            let base = t * kv_dim + kh * hd;
+            let vt = &values[base..base + hd];
+            let w = scores[t];
+            for i in 0..hd {
+                oh[i] += w * vt[i];
+            }
+        }
+    }
 }
