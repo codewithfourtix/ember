@@ -95,21 +95,33 @@ INT8 is near-lossless; INT4 needs **group-wise** scales — per-row is too coars
 the output falls apart. Reproduce the table with
 [`scripts/quantize_check.py`](scripts/quantize_check.py).
 
-**Throughput** (`--bench`, on a 2-vCPU GitHub Actions runner — indicative):
+### Metrics — measured on the real Qwen2.5-0.5B
 
-| scheme | memory | tok/s |
+**Quality & memory** — perplexity over a fixed passage (`--perplexity`, lower is better):
+
+| scheme | weights | vs f32 | perplexity ↓ |
+|---|---|---|---|
+| `none` (f32) | 1976 MB | 1.0× | 6.49 |
+| **`int8`** | **496 MB** | **4.0×** | **6.38** — quality-lossless |
+| **`int4`** (group-64) | **278 MB** | **7.1×** | 7.75 — +19% |
+
+INT8 quantization is **free** on quality (perplexity is within noise of f32); INT4
+trades ~19% perplexity for a 7× memory cut.
+
+**Latency** — greedy, single machine (`--prompt … -n 20`):
+
+| scheme | prefill | decode |
 |---|---|---|
-| `none` (f32) | 1976 MB | **7.1** |
-| `int8` | 496 MB | 4.4 |
-| `int4` (group-64) | 278 MB | 2.4 |
+| f32 | 8.3 tok/s | 8.6 tok/s · 116 ms/tok |
+| int8 | 6.6 tok/s | 6.6 tok/s · 152 ms/tok |
 
-Quantization here is a **memory** win — 4× / 7× smaller, so the model fits in a
-fraction of the RAM. The current dequant path is *scalar*, so it trades throughput;
-a SIMD / bandwidth-optimized dequant is the natural next optimization.
+Quantization is a **memory** win; the current scalar dequant is slightly slower per
+token, so a SIMD / bandwidth-optimized dequant is the natural next optimization.
 
 ```bash
-cargo run --release -- --prompt "The capital of France is" --quant int8   # or int4 / none
-cargo run --release -- --bench --quant int8                                 # measure throughput
+ember --perplexity --quant int8                 # quality metric
+ember --bench --quant int8                       # throughput on random weights
+ember --prompt "The capital of France is" --quant int8
 ```
 
 ## Roadmap
