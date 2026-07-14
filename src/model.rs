@@ -15,7 +15,7 @@ use crate::attention::{attention, KvCache};
 use crate::config::Config;
 use crate::ops::{rms_norm, rope, swiglu};
 use crate::quant::{Linear, Quant};
-use crate::tensor::{add_assign, add_bias, matvec};
+use crate::tensor::{add_assign, add_bias};
 
 /// Cap the KV cache so a huge `max_position_embeddings` doesn't allocate GBs.
 const MAX_CONTEXT: usize = 4096;
