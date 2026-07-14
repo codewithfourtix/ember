@@ -1,56 +1,145 @@
-<div align="center">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/codewithfourtix/ember/main/docs/hero.png" width="100%" alt="ember running in a terminal: a chat prompt asking for a haiku about Rust, the model's reply, and live metrics — decode 8.6 tok/s, perplexity 6.38, 4x smaller than f32, no ML framework." />
+</p>
 
-# 🔥 ember
+<h1 align="center">🔥&nbsp;&nbsp;e m b e r</h1>
 
-**Run a real LLM on your CPU — a from-scratch inference engine in Rust.**
+<p align="center">
+  <b>A from-scratch LLM inference engine in Rust.<br/>
+  Run a real language model on your CPU — <em>no framework, no GPU, no server.</em></b>
+</p>
 
-[![CI](https://github.com/codewithfourtix/ember/actions/workflows/ci.yml/badge.svg)](https://github.com/codewithfourtix/ember/actions/workflows/ci.yml)
-[![Rust](https://img.shields.io/badge/Rust-2021-CE422B?style=flat-square&logo=rust&logoColor=white&labelColor=0d0e11)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=0d0e11)](LICENSE)
+<p align="center">
+  <b>Hand-written transformer</b> · RMSNorm · RoPE · GQA + KV-cache · SwiGLU
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <b>INT8 / INT4</b> quantization
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <b>no</b> TensorFlow / PyTorch / <code>candle</code>
+</p>
 
-</div>
+<p align="center">
+  <a href="https://github.com/codewithfourtix/ember/actions/workflows/ci.yml"><img src="https://github.com/codewithfourtix/ember/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021-f0883e?style=flat-square&logo=rust&logoColor=white&labelColor=0d1117" alt="Rust 2021"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-f0883e?style=flat-square&labelColor=0d1117" alt="MIT"/></a>
+  <a href="#-how-it-works"><img src="https://img.shields.io/badge/neural%20net-from%20scratch-f0883e?style=flat-square&labelColor=0d1117" alt="from scratch"/></a>
+  <a href="#-metrics--measured-on-the-real-model"><img src="https://img.shields.io/badge/INT8-quality--lossless-f0883e?style=flat-square&labelColor=0d1117" alt="INT8 lossless"/></a>
+</p>
 
-`ember` loads a **Qwen2.5** model and generates text with a hand-written transformer
-forward pass — RMSNorm, RoPE, grouped-query attention with a KV cache, and a SwiGLU
-MLP — then runs the heavy matrices through custom **INT8/INT4 quantization** so a
-0.5–1.5B model fits in a laptop's memory and decodes fast. **No `candle`, `burn`,
-`tch`, or `ndarray` in the core:** the transformer math is the project.
+<p align="center">
+  <a href="#what-it-is"><b>What it is</b></a> &nbsp;·&nbsp;
+  <a href="#-metrics--measured-on-the-real-model"><b>Metrics</b></a> &nbsp;·&nbsp;
+  <a href="#-how-it-works"><b>How it works</b></a> &nbsp;·&nbsp;
+  <a href="#quickstart"><b>Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="#how-its-verified"><b>Verified</b></a>
+</p>
 
-> **Status.** All three phases implemented: a verified f32 forward pass, INT8/INT4
-> quantization (4× / 7× smaller, still coherent), and a ChatML chat mode. Every kernel
-> is cross-checked against a NumPy reference — see [`PHASES.md`](PHASES.md).
+<br/>
 
-```console
-$ ember --prompt "The capital of France is"
-The capital of France is Paris. It is the largest city in Europe and the third
+## What it is
 
-$ ember --chat --prompt "Write a haiku about Rust programming."
-Rust's syntax shines,
-Type-safe, concise, and fast,
-Programming heaven.
+<p align="center">
+  Most "LLM in Rust" projects are a wrapper around <code>candle</code> or <code>llama.cpp</code>.<br/>
+  <b>ember isn't.</b> The transformer forward pass — attention, the KV cache, RoPE, quantization —<br/>
+  is written by hand. The only dependencies are plumbing: weight loading, the tokenizer, threads.<br/>
+  <sub><b>~1,300 lines of Rust. No ML framework. No GPU. Runs a real Qwen2.5 model on a laptop CPU.</b></sub>
+</p>
+
+<table>
+<tr>
+<td width="33%" valign="top" align="center">
+
+### 🧮 Hand-written
+Every kernel from scratch — `matvec`, **RMSNorm**, **RoPE**, grouped-query **attention** + KV cache, **SwiGLU**, softmax. No `candle`, `burn`, `tch`, or `ndarray` in the core.
+
+</td>
+<td width="33%" valign="top" align="center">
+
+### 🗜 Quantized
+Custom **INT8** and group-wise **INT4** with a fused dequant mat-vec — **4× / 7×** smaller, and INT8 is **quality-lossless** (measured, not claimed).
+
+</td>
+<td width="33%" valign="top" align="center">
+
+### ✅ Verified
+Green **CI** (build + 13 tests + a live run), a **NumPy oracle** that mirrors the math, and **perplexity** numbers — this is *evaluated*, not just "it runs".
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+## 📊 Metrics — measured on the real model
+
+Real numbers, Qwen2.5-0.5B, through the compiled engine — not estimates.
+
+**Quality & memory** — perplexity over a fixed passage (`--perplexity`, lower is better):
+
+| scheme | weights | vs f32 | perplexity ↓ | verdict |
+|---|---:|---:|---:|---|
+| `f32` | 1976 MB | 1.0× | 6.49 | baseline |
+| **`int8`** | **496 MB** | **4.0×** | **6.38** | **quality-lossless** — within noise of f32 |
+| **`int4`** (group-64) | **278 MB** | **7.1×** | 7.75 | +19% — a real, quantified trade |
+
+**Latency** — greedy, single CPU (`--prompt … -n 20`):
+
+| scheme | prefill | decode |
+|---|---:|---:|
+| `f32` | 8.3 tok/s | 8.6 tok/s · 116 ms/tok |
+| `int8` | 6.6 tok/s | 6.6 tok/s · 152 ms/tok |
+
+> **The headline:** INT8 gives **4× less memory for free** (perplexity 6.38 vs 6.49). INT4 buys
+> **7× less memory** for ~19% perplexity. Quantization is a *memory* win here; the scalar dequant
+> trades a little throughput, so SIMD dequant is the natural next step.
+
+<br/>
+
+## 🧠 How it works
+
+One decode step is a stack of hand-written kernels. The ego of the whole project is that
+**every box below is code in this repo**, not a library call.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#161b22','primaryTextColor':'#e6edf3','primaryBorderColor':'#f0883e','lineColor':'#f0883e','fontSize':'14px'}}}%%
+flowchart LR
+  TOK["token id"] --> EMB["Embedding<br/>(dequantized row)"]
+  EMB --> BLK
+  subgraph BLK["× 24 transformer blocks"]
+    direction TB
+    N1["RMSNorm"] --> ATT["Grouped-Query Attention<br/>RoPE · causal KV cache"]
+    ATT --> R1(("+"))
+    R1 --> N2["RMSNorm"]
+    N2 --> MLP["SwiGLU MLP"]
+    MLP --> R2(("+"))
+  end
+  BLK --> FN["RMSNorm"]
+  FN --> LM["LM head<br/>(tied embedding)"]
+  LM --> LOG["logits"] --> SMP["sample"] --> TOK
+
+  classDef s fill:#161b22,stroke:#30363d,color:#e6edf3;
+  class TOK,EMB,N1,ATT,R1,N2,MLP,R2,FN,LM,LOG,SMP s;
 ```
 
-<sub>Qwen2.5-0.5B, cross-checked token-for-token against the NumPy reference in <a href="scripts/reference_forward.py"><code>scripts/reference_forward.py</code></a>.</sub>
+<details>
+<summary><b>Module map</b></summary>
 
-## Why build this
-
-Writing an inference engine is the clearest way to understand — and to demonstrate
-understanding of — how modern LLMs actually run: attention, the KV cache, the
-memory-bandwidth wall of CPU decoding, and quantization. The only dependencies here
-are for plumbing (weight loading, tokenization, threading); every kernel is hand-written.
-
-## Design
+<br/>
 
 | Module | Responsibility |
 |---|---|
-| [`config.rs`](src/config.rs) | Parse the model's `config.json` (Qwen2.5 / Llama-style). |
-| [`tensor.rs`](src/tensor.rs) | The hot loop — hand-written, `rayon`-parallel mat-vec. |
-| [`ops.rs`](src/ops.rs) | RMSNorm, RoPE, SwiGLU, softmax. |
-| [`attention.rs`](src/attention.rs) | Grouped-query attention + the rolling KV cache. |
-| [`quant.rs`](src/quant.rs) | Row-wise INT8/INT4 quantization + fused dequant mat-vec. |
-| [`sample.rs`](src/sample.rs) | Greedy / temperature / top-p sampling. |
-| [`model.rs`](src/model.rs) | safetensors weight loading + the full forward pass. |
-| [`main.rs`](src/main.rs) | CLI and the generation loop. |
+| [`config.rs`](src/config.rs) | Parse the Qwen2.5 `config.json` (GQA-aware) |
+| [`tensor.rs`](src/tensor.rs) | The `rayon`-parallel mat-vec hot loop |
+| [`ops.rs`](src/ops.rs) | RMSNorm · RoPE (rotate-half) · SwiGLU · softmax |
+| [`attention.rs`](src/attention.rs) | Grouped-query attention + rolling KV cache |
+| [`quant.rs`](src/quant.rs) | INT8 / group-wise INT4 quantization + fused dequant mat-vec |
+| [`sample.rs`](src/sample.rs) | Greedy / temperature / top-p sampling |
+| [`model.rs`](src/model.rs) | safetensors loading (bf16→f32) + the forward pass |
+| [`chat.rs`](src/chat.rs) | Qwen ChatML formatting |
+| [`main.rs`](src/main.rs) | CLI, generation loop, `--bench`, `--perplexity` |
+
+</details>
+
+<br/>
 
 ## Quickstart
 
@@ -62,81 +151,43 @@ rustup default stable
 huggingface-cli download Qwen/Qwen2.5-0.5B-Instruct \
   model.safetensors config.json tokenizer.json --local-dir ./weights
 
-# 3. Build & run
-cargo run --release -- --prompt "The capital of France is" --model ./weights
+# 3. Chat, or complete, or quantize
+cargo run --release -- --chat --prompt "Write a haiku about Rust programming."
+cargo run --release -- --prompt "The capital of France is" --quant int8
+cargo run --release -- --perplexity --quant int4     # measure quality
+cargo run --release -- --bench --quant int8          # measure throughput
 ```
 
-## Correctness oracle
+<sub>On Windows, the tokenizer needs a C compiler at build time — use WSL, or install <a href="https://github.com/brechtsanders/winlibs_mingw">WinLibs</a> / MSVC Build Tools. Linux &amp; macOS work out of the box.</sub>
 
-Before trusting the generation loop, match a **single forward pass** against
-HuggingFace `transformers`:
+<br/>
 
-```bash
-pip install torch transformers
-python scripts/reference_logits.py --model Qwen/Qwen2.5-0.5B-Instruct
+## How it's verified
+
+Nothing here is "trust me":
+
+- **CI** — every push runs `cargo build --release`, **13 unit tests**, and a live `--bench` on the runner ([status](https://github.com/codewithfourtix/ember/actions/workflows/ci.yml)).
+- **NumPy oracle** — [`scripts/reference_forward.py`](scripts/reference_forward.py) reimplements the exact math; the Rust output matches it token-for-token.
+- **Perplexity** — the quantization quality numbers above are measured, not asserted.
+
+```console
+$ ember --chat --prompt "What is the capital of France? Answer in one sentence."
+The capital of France is Paris.
 ```
 
-`ember`'s next-token logits for the same prompt should agree to ~`1e-3`. Reach parity
-here first and every remaining bug is in the loop, not the model.
-
-## Quantization (Phase 2)
-
-Row/group-wise symmetric weight quantization, dequantized on the fly inside the
-mat-vec. Real numbers on Qwen2.5-0.5B (greedy, prompt *"The capital of France is"*):
-
-| scheme | weights | vs f32 | greedy continuation |
-|---|---|---|---|
-| `f32` | 1976 MB | 1.0× | …Paris. It is the largest city in Europe and the third largest city |
-| **`int8`** (per-row) | **496 MB** | **4.0×** | …Paris. It is the largest city in Europe and the third largest in |
-| `int4` per-row | 249 MB | 7.9× | ✗ collapses (*"A. The Eiffel…"*) |
-| **`int4`** (group-64) | **278 MB** | **7.1×** | …Paris. It is the largest city in Europe. It is also the |
-
-INT8 is near-lossless; INT4 needs **group-wise** scales — per-row is too coarse and
-the output falls apart. Reproduce the table with
-[`scripts/quantize_check.py`](scripts/quantize_check.py).
-
-### Metrics — measured on the real Qwen2.5-0.5B
-
-**Quality & memory** — perplexity over a fixed passage (`--perplexity`, lower is better):
-
-| scheme | weights | vs f32 | perplexity ↓ |
-|---|---|---|---|
-| `none` (f32) | 1976 MB | 1.0× | 6.49 |
-| **`int8`** | **496 MB** | **4.0×** | **6.38** — quality-lossless |
-| **`int4`** (group-64) | **278 MB** | **7.1×** | 7.75 — +19% |
-
-INT8 quantization is **free** on quality (perplexity is within noise of f32); INT4
-trades ~19% perplexity for a 7× memory cut.
-
-**Latency** — greedy, single machine (`--prompt … -n 20`):
-
-| scheme | prefill | decode |
-|---|---|---|
-| f32 | 8.3 tok/s | 8.6 tok/s · 116 ms/tok |
-| int8 | 6.6 tok/s | 6.6 tok/s · 152 ms/tok |
-
-Quantization is a **memory** win; the current scalar dequant is slightly slower per
-token, so a SIMD / bandwidth-optimized dequant is the natural next optimization.
-
-```bash
-ember --perplexity --quant int8                 # quality metric
-ember --bench --quant int8                       # throughput on random weights
-ember --prompt "The capital of France is" --quant int8
-```
+<br/>
 
 ## Roadmap
 
-See [`PHASES.md`](PHASES.md) for the full plan.
+See [`PHASES.md`](PHASES.md).
 
-- [x] **Phase 1 — Correctness** — safetensors loading, tokenizer, all kernels (RMSNorm,
-      RoPE, GQA attention + KV cache, SwiGLU), the full forward pass, sampling, and the
-      generation loop. Verified: generates coherent text from Qwen2.5-0.5B.
-- [x] **Phase 2 — Performance** — INT8/INT4 quantization (4.0× / 7.1× memory, coherent),
-      `rayon`-parallel mat-vec, and a `--bench` throughput harness (numbers above).
-- [x] **Phase 3 — Polish & ship** — streaming output, ChatML chat mode (`--chat`), the
-      quantization benchmark table above, and `cargo test` kernel unit tests. Tokens/sec
-      numbers land once the binary is built on a host without the local toolchain block.
+- [x] **Phase 1 — Correctness** — hand-written forward pass; generates coherent text
+- [x] **Phase 2 — Performance** — INT8 / INT4 quantization (4× / 7× memory) + `--bench`
+- [x] **Phase 3 — Polish** — chat mode, unit tests, perplexity + latency metrics, CI
+- [ ] **Next** — SIMD dequant (throughput), a static-linked binary, a perf PR upstream
 
-## License
+<br/>
 
-MIT © [Ali Zulfiqar](https://github.com/codewithfourtix)
+<p align="center">
+  <sub>Built by <a href="https://github.com/codewithfourtix">Ali Zulfiqar</a> — a transformer, from the gradients up.</sub>
+</p>

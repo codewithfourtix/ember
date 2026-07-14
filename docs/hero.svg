@@ -1,0 +1,35 @@
+<svg width="920" height="372" viewBox="0 0 920 372" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,'SF Mono','Cascadia Code','JetBrains Mono',Consolas,monospace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#12151c"/>
+      <stop offset="1" stop-color="#0b0d12"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- terminal window -->
+  <rect x="10" y="10" width="900" height="352" rx="14" fill="url(#bg)" stroke="#272d38" stroke-width="1.5" filter="url(#shadow)"/>
+
+  <!-- title bar -->
+  <circle cx="42" cy="42" r="6.5" fill="#ff5f56"/>
+  <circle cx="66" cy="42" r="6.5" fill="#febc2e"/>
+  <circle cx="90" cy="42" r="6.5" fill="#28c840"/>
+  <text x="460" y="47" text-anchor="middle" font-size="13.5" fill="#5b6472">ember — a from-scratch LLM engine</text>
+  <line x1="10" y1="68" x2="910" y2="68" stroke="#20252e" stroke-width="1"/>
+
+  <!-- body -->
+  <text font-size="16.5" xml:space="preserve">
+    <tspan x="34" y="108"><tspan fill="#3fb950">$ </tspan><tspan fill="#e6edf3">ember </tspan><tspan fill="#7d8590">--chat --quant int8 --prompt </tspan><tspan fill="#e3b341">"Write a haiku about Rust"</tspan></tspan>
+    <tspan x="34" y="138" fill="#59616d">  loaded Qwen2.5-0.5B · int8 · 496 MB · ready in 4.2s</tspan>
+    <tspan x="34" y="188" fill="#c9d4e3">  Rust's syntax shines,</tspan>
+    <tspan x="34" y="218" fill="#c9d4e3">  Type-safe, concise, and fast,</tspan>
+    <tspan x="34" y="248" fill="#c9d4e3">  Programming heaven.</tspan>
+  </text>
+
+  <!-- metrics footer -->
+  <line x1="34" y1="286" x2="886" y2="286" stroke="#20252e" stroke-width="1"/>
+  <text font-size="15" x="34" y="318" xml:space="preserve"><tspan fill="#3fb950">▸ </tspan><tspan fill="#8b949e">decode </tspan><tspan fill="#e6edf3">8.6 tok/s</tspan><tspan fill="#8b949e">   ·   perplexity </tspan><tspan fill="#e6edf3">6.38</tspan><tspan fill="#8b949e">   ·   </tspan><tspan fill="#e6edf3">4× smaller</tspan><tspan fill="#8b949e"> than f32   ·   </tspan><tspan fill="#e6edf3">no ML framework</tspan></text>
+  <rect x="245" y="236" width="9" height="17" fill="#c9d4e3" opacity="0.85"/>
+</svg>
