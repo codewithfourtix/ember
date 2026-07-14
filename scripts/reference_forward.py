@@ -55,6 +55,7 @@ def main():
     ap.add_argument("--model", default="weights")
     ap.add_argument("--prompt", default="The capital of France is")
     ap.add_argument("--max-tokens", type=int, default=32)
+    ap.add_argument("--chat", action="store_true", help="wrap the prompt in the Qwen ChatML template")
     args = ap.parse_args()
 
     c = json.load(open(f"{args.model}/config.json"))
@@ -130,7 +131,14 @@ def main():
         return embed @ x  # tied LM head
 
     tok = Tokenizer.from_file(f"{args.model}/tokenizer.json")
-    ids = tok.encode(args.prompt, add_special_tokens=False).ids
+    prompt = args.prompt
+    if args.chat:
+        prompt = (
+            "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+            f"<|im_start|>user\n{args.prompt}<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+    ids = tok.encode(prompt, add_special_tokens=False).ids
     logits = None
     for pos, i in enumerate(ids):
         logits = forward(i, pos)
