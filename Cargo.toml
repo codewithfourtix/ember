@@ -7,5 +7,23 @@ description = "A from-scratch LLM inference engine in Rust — run a real LLM on
 license = "MIT"
 repository = "https://github.com/codewithfourtix/ember"
 readme = "README.md"
+keywords = ["llm", "inference", "transformer", "quantization", "cpu"]
+categories = ["command-line-utilities", "science"]
 
 [dependencies]
+# Plumbing only — the transformer math is hand-written.
+anyhow = "1"                                          # ergonomic error handling
+clap = { version = "4", features = ["derive"] }       # CLI parsing
+half = "2"                                            # f16 weight support
+memmap2 = "0.9"                                       # mmap the weights file
+rayon = "1"                                           # parallelise the mat-vec hot loop
+safetensors = "0.4"                                   # load model weights
+serde = { version = "1", features = ["derive"] }      # config.json deserialization
+serde_json = "1"
+tokenizers = "0.20"                                   # BPE tokenizer (tokenizer.json)
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
