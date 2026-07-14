@@ -183,3 +183,45 @@ impl Linear {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn int8_matvec_tracks_dense() {
+        let w = vec![0.5, -1.0, 2.0, 0.25, 1.5, 0.0, -0.5, 3.0]; // 2×4
+        let x = [1.0, 2.0, -1.0, 0.5];
+        let dense = Linear::build(w.clone(), 2, 4, Quant::None);
+        let q8 = Linear::build(w, 2, 4, Quant::Int8);
+        let (mut yd, mut yq) = ([0.0; 2], [0.0; 2]);
+        dense.matvec(&x, &mut yd);
+        q8.matvec(&x, &mut yq);
+        for i in 0..2 {
+            assert!((yd[i] - yq[i]).abs() < 0.1 * (yd[i].abs() + 1.0), "{} vs {}", yd[i], yq[i]);
+        }
+    }
+
+    #[test]
+    fn int4_group_roundtrip_within_one_step() {
+        let (rows, cols) = (2, INT4_GROUP);
+        let w: Vec<f32> = (0..rows * cols).map(|i| ((i % 13) as f32 - 6.0) * 0.3).collect();
+        let q4 = Linear::build(w.clone(), rows, cols, Quant::Int4);
+        let row0 = q4.row(0);
+        let scale = w[..cols].iter().fold(0.0f32, |m, &v| m.max(v.abs())) / 7.0;
+        for c in 0..cols {
+            assert!((row0[c] - w[c]).abs() <= scale + 1e-4, "{} vs {}", row0[c], w[c]);
+        }
+    }
+
+    #[test]
+    fn quantization_shrinks_memory() {
+        let (rows, cols) = (4, INT4_GROUP);
+        let w = vec![1.0f32; rows * cols];
+        let f32_bytes = Linear::build(w.clone(), rows, cols, Quant::None).bytes();
+        let i8_bytes = Linear::build(w.clone(), rows, cols, Quant::Int8).bytes();
+        let i4_bytes = Linear::build(w, rows, cols, Quant::Int4).bytes();
+        assert!(i8_bytes < f32_bytes && i4_bytes < i8_bytes);
+    }
+}
+

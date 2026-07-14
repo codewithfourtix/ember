@@ -39,3 +39,25 @@ pub fn add_assign(a: &mut [f32], b: &[f32]) {
 pub fn add_bias(a: &mut [f32], bias: &[f32]) {
     add_assign(a, bias);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matvec_small() {
+        // W = [[1,2,3],[4,5,6]], x = [1,0,-1]  ⇒  y = [-2, -2]
+        let w = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let x = [1.0, 0.0, -1.0];
+        let mut y = [0.0; 2];
+        matvec(&w, &x, &mut y, 3, 2);
+        assert_eq!(y, [-2.0, -2.0]);
+    }
+
+    #[test]
+    fn add_assign_adds() {
+        let mut a = [1.0, 2.0, 3.0];
+        add_assign(&mut a, &[0.5, -1.0, 10.0]);
+        assert_eq!(a, [1.5, 1.0, 13.0]);
+    }
+}

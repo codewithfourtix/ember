@@ -91,3 +91,24 @@ impl Rng {
         (self.next_u64() >> 40) as f32 / (1u64 << 24) as f32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn greedy_takes_argmax() {
+        let logits = [0.1, 5.0, -2.0, 4.9];
+        let mut rng = Rng::new(1);
+        assert_eq!(Sampler::Greedy.sample(&logits, &mut rng), 1);
+    }
+
+    #[test]
+    fn rng_stays_in_unit_interval() {
+        let mut r = Rng::new(42);
+        for _ in 0..1000 {
+            let x = r.next_f32();
+            assert!((0.0..1.0).contains(&x), "{x} out of range");
+        }
+    }
+}

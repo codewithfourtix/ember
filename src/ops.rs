@@ -70,3 +70,57 @@ pub fn softmax(x: &mut [f32]) {
         *v *= inv;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx(a: f32, b: f32) {
+        assert!((a - b).abs() < 1e-4, "{a} vs {b}");
+    }
+
+    #[test]
+    fn softmax_uniform() {
+        let mut x = [0.0, 0.0];
+        softmax(&mut x);
+        approx(x[0], 0.5);
+        approx(x[1], 0.5);
+    }
+
+    #[test]
+    fn softmax_normalises_and_orders() {
+        let mut x = [1.0, 2.0, 3.0, -1.0];
+        softmax(&mut x);
+        approx(x.iter().sum::<f32>(), 1.0);
+        assert!(x[2] > x[1] && x[1] > x[0]);
+    }
+
+    #[test]
+    fn swiglu_matches_silu() {
+        // silu(1)·2 = (1·σ(1))·2 = 0.7310586·2 = 1.4621172
+        let mut out = [0.0];
+        swiglu(&[1.0], &[2.0], &mut out);
+        approx(out[0], 1.4621172);
+    }
+
+    #[test]
+    fn rms_norm_gives_unit_rms() {
+        // With unit weights, the output RMS should be ~1.
+        let x = [3.0, 4.0, -5.0, 2.0];
+        let w = [1.0; 4];
+        let mut out = [0.0; 4];
+        rms_norm(&x, &w, &mut out, 1e-6);
+        let mean_sq: f32 = out.iter().map(|v| v * v).sum::<f32>() / 4.0;
+        approx(mean_sq, 1.0);
+    }
+
+    #[test]
+    fn rope_preserves_norm() {
+        // A rotation must not change a vector's length.
+        let mut v = [0.5, -1.0, 2.0, 0.3, 1.0, 0.0, -0.7, 0.9];
+        let before: f32 = v.iter().map(|x| x * x).sum();
+        rope(&mut v, 5, 8, 10_000.0);
+        let after: f32 = v.iter().map(|x| x * x).sum();
+        approx(before, after);
+    }
+}
