@@ -74,6 +74,26 @@ python scripts/reference_logits.py --model Qwen/Qwen2.5-0.5B-Instruct
 `ember`'s next-token logits for the same prompt should agree to ~`1e-3`. Reach parity
 here first and every remaining bug is in the loop, not the model.
 
+## Quantization (Phase 2)
+
+Row/group-wise symmetric weight quantization, dequantized on the fly inside the
+mat-vec. Real numbers on Qwen2.5-0.5B (greedy, prompt *"The capital of France is"*):
+
+| scheme | weights | vs f32 | greedy continuation |
+|---|---|---|---|
+| `f32` | 1976 MB | 1.0× | …Paris. It is the largest city in Europe and the third largest city |
+| **`int8`** (per-row) | **496 MB** | **4.0×** | …Paris. It is the largest city in Europe and the third largest in |
+| `int4` per-row | 249 MB | 7.9× | ✗ collapses (*"A. The Eiffel…"*) |
+| **`int4`** (group-64) | **278 MB** | **7.1×** | …Paris. It is the largest city in Europe. It is also the |
+
+INT8 is near-lossless; INT4 needs **group-wise** scales — per-row is too coarse and
+the output falls apart. Reproduce the table with
+[`scripts/quantize_check.py`](scripts/quantize_check.py).
+
+```bash
+cargo run --release -- --prompt "The capital of France is" --quant int8   # or int4 / none
+```
+
 ## Roadmap
 
 See [`PHASES.md`](PHASES.md) for the full plan.
@@ -81,7 +101,8 @@ See [`PHASES.md`](PHASES.md) for the full plan.
 - [x] **Phase 1 — Correctness** — safetensors loading, tokenizer, all kernels (RMSNorm,
       RoPE, GQA attention + KV cache, SwiGLU), the full forward pass, sampling, and the
       generation loop. Verified: generates coherent text from Qwen2.5-0.5B.
-- [ ] **Phase 2 — Performance** — `rayon` tuning, INT8/INT4 quantization, tok/s + memory benchmarks
+- [~] **Phase 2 — Performance** — INT8/INT4 quantization implemented (4.0× / 7.1× memory,
+      coherent) + `rayon`-parallel mat-vec. Tokens/sec benchmark to follow on a build host.
 - [ ] **Phase 3 — Polish & ship** — streaming CLI, chat template, benchmark table, tests, write-up
 
 ## License
